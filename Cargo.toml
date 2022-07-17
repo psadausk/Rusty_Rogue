@@ -3,4 +3,5 @@ name = "RustyRogue"
 version = "0.1.0"
 
 [dependencies]
-tcod = { git = "https://github.com/mystal/tcod-rs", branch = "update_to_1.6.3", features = ["serialization"] }
+rand = "0.3"
+tcod = "0.15"

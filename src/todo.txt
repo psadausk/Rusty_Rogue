@@ -1,0 +1,46 @@
+1) Add speed
+    - Every action takes a certain number of turns 
+    - Interuptable actions?
+    - need an option to wait/skip an action (wait until the next thing acts, then act)
+    - This enables certain things like an arrow moving multiple consecutive turns, before the player goes
+        and allowing the player to see along the arrow's path
+
+    - Test this using a fire arrow that moves over distance. It should appear to moves
+    - Work with ai and enemies maybe? 
+        - Have some enemies that move/act twice perturn
+        - Maybe even have larger with multiple parts that move at different speeds
+
+2) Light sources
+    Light has 
+        1) intensity
+            -fades over time per some factor
+        2) fade factor?
+            - the factor at which intensity fades over time
+            - Could be non linear?
+        3) Raduis
+            Should this be tied directly into intensity? The more intense a light is, the larger the radius?
+        4) Angle
+            - Most lights wouldbe 365, but a flash light could be narrower, but brighter
+4) FIRE
+    Light source that spreads. Objects need a burnable factor   
+        - How easily they catch on fire
+        - How long it stays on fire
+        - How intense is the fire (light source?)
+
+
+5) new map types?
+    Outdoor forest
+        - wide open area 
+6) doors?
+    Cannot see into a room until door has been open
+    Ability to re close a door
+7) action 
+    Player needs to be able to interact with the enviroment
+
+8) Figure out better plan for graphics
+    Stick with ascii art? Or use sprites?
+        ASCII art is easier to shade I thinkk, although it may be simple to add a shaded pallete
+    Figure out out to deal with larger enemies...I guess inclduing in animate objects such as  trees
+    
+
+
