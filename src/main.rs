@@ -1,16 +1,12 @@
-#![allow(dead_code)]
 extern crate rand;
 extern crate tcod;
-//extern crate std;
 
-//use entities::movement::player_movement::PlayerMovement;
 use entities::object::Object;
 use map::map::Map;
-use std::boxed::Box;
-use tcod::colors::{self, Color};
 use tcod::console::*;
-use tcod::console::{self, Offscreen, Root};
-use tcod::map::{FovAlgorithm, Map as FovMap};
+use tcod::console::{Offscreen, Root};
+
+use crate::entities::object::move_by;
 
 mod entities;
 mod map;
@@ -23,22 +19,7 @@ const LIMIT_FPS: i32 = 20;
 const MAP_WIDTH: i32 = 80;
 const MAP_HEIGHT: i32 = 45;
 
-const COLOR_DARK_WALL: Color = Color { r: 51, g: 21, b: 0 };
-const COLOR_DARK_FLOOR: Color = Color {
-    r: 80,
-    g: 64,
-    b: 20,
-};
-const COLOR_LIGHT_WALL: Color = Color { r: 84, g: 35, b: 0 };
-const COLOR_LIGHT_FLOOR: Color = Color {
-    r: 200,
-    g: 180,
-    b: 50,
-};
-
-const FOV_ALGO: FovAlgorithm = FovAlgorithm::Basic;
-const FOV_LIGHT_WALLS: bool = true;
-const TORCH_RADIUS: i32 = 10;
+const PLAYER_IDX: usize = 0;
 
 fn main() {
     print!("inited");
@@ -51,26 +32,14 @@ fn main() {
 
     let mut con = Offscreen::new(MAP_WIDTH, MAP_HEIGHT);
     let mut map = Map::new(MAP_WIDTH, MAP_HEIGHT);
-    let (player_pos_x, player_pos_y) = map.make_rand_map();
-    let player = Object::new(player_pos_x, player_pos_y, '@', colors::WHITE);
-
-    print!("Made the map");
-    // //let npc = Object::new(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, '@', colors::YELLOW);
-    let mut objects = [player];
-
-    // let mut fov_map = FovMap::new(MAP_WIDTH, MAP_HEIGHT);
-    // for y in 0..MAP_HEIGHT {
-    //     for x in 0..MAP_WIDTH {
-    //         fov_map.set(x, y, !map.map[x as usize][y as usize].block_sight, !map.map[x as usize][y as usize].blocked);
-    //     }
-    // }
+    let mut objects = map.make_rand_map();
 
     let mut prev_pos = (-1, -1);
 
     tcod::system::set_fps(LIMIT_FPS);
 
     while !root.window_closed() {
-        let fov_recompute = prev_pos != (objects[0].x, objects[0].y);
+        let fov_recompute = prev_pos != objects[0].get_pos();
         render_all(&mut root, &mut con, &mut objects, &mut map, fov_recompute);
 
         // erase all objects at their old locations, before they move
@@ -80,42 +49,102 @@ fn main() {
 
         // handle keys and exit game if needed
         let player = &mut objects[0];
-        prev_pos = (player.x, player.y);
-        let exit = handle_keys(&mut root, player, &map);
-        if exit {
+        prev_pos = player.get_pos();
+        let player_action = handle_keys(&mut root, &map, &mut objects);
+        if player_action == PlayerAction::Exit {
             break;
+        }
+
+        // let monsters take their turn
+        if objects[PLAYER_IDX].alive && player_action != PlayerAction::DidntTakeTurn {
+            for object in &objects {
+                // only if object is not player
+                if (object as *const _) != (&objects[PLAYER_IDX] as *const _) {
+                    println!("The {} growls!", object.name);
+                }
+            }
         }
     }
 }
 
-fn handle_keys(root: &mut Root, player: &mut Object, map: &Map) -> bool {
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum PlayerAction {
+    TookTurn,
+    DidntTakeTurn,
+    Exit,
+}
+
+fn handle_keys(root: &mut Root, map: &Map, objects: &mut Vec<Object>) -> PlayerAction {
     use tcod::input::Key;
     use tcod::input::KeyCode::*;
+    use PlayerAction::*;
 
     let key = root.wait_for_keypress(true);
-    match key {
-        Key {
-            code: Enter,
-            alt: true,
-            ..
-        } => {
+    let player_alive = objects[0].alive;
+    match (key, key.text(), player_alive) {
+        (
+            Key {
+                code: Enter,
+                alt: true,
+                ..
+            },
+            _,
+            _,
+        ) => {
             // Alt+Enter: toggle fullscreen
             let fullscreen = root.is_fullscreen();
             root.set_fullscreen(!fullscreen);
+            return DidntTakeTurn;
         }
-        Key { code: Escape, .. } => return true, // exit game
+        (Key { code: Escape, .. }, _, true) => return Exit, // exit game
 
         // movement keys
-        Key { code: Spacebar, .. } => {}
-        Key { code: Up, .. } => player.move_by(0, -1, &map),
-        Key { code: Down, .. } => player.move_by(0, 1, &map),
-        Key { code: Left, .. } => player.move_by(-1, 0, &map),
-        Key { code: Right, .. } => player.move_by(1, 0, &map),
+        //Key { code: Spacebar, .. } => {}
+        (Key { code: Up, .. }, _, true) => {
+            player_move_or_attack(0, -1, &map, objects);
+            return TookTurn;
+        }
+        (Key { code: Down, .. }, _, true) => {
+            player_move_or_attack(0, 1, &map, objects);
+            return TookTurn;
+        }
+        (Key { code: Left, .. }, _, true) => {
+            player_move_or_attack(-1, 0, &map, objects);
+            return TookTurn;
+        }
+        (Key { code: Right, .. }, _, true) => {
+            player_move_or_attack(1, 0, &map, objects);
+            return TookTurn;
+        }
 
-        _ => {}
+        _ => return DidntTakeTurn,
     }
+}
 
-    false
+fn player_move_or_attack(dx: i32, dy: i32, map: &Map, objects: &mut [Object]) {
+    // the coordinates the player is moving to/attacking
+    let (x, y) = objects[PLAYER_IDX].get_pos();
+
+    let new_x = x + dx;
+    let new_y = y + dy;
+
+    // try to find an attackable object there
+    let target_id = objects
+        .iter()
+        .position(|object| object.get_pos() == (new_x, new_y));
+
+    // attack if target found, move otherwise
+    match target_id {
+        Some(target_id) => {
+            println!(
+                "The {} laughs at your puny efforts to attack him!",
+                objects[target_id].name
+            );
+        }
+        None => {
+            move_by(PLAYER_IDX, dx, dy, &map, objects);
+        }
+    }
 }
 
 fn render_all(
@@ -126,14 +155,16 @@ fn render_all(
     fov_recompute: bool,
 ) {
     if fov_recompute {
-        let player = &mut objects[0];
-        map.refresh_visibility(player.x, player.y);
+        let (x, y) = objects[0].get_pos();
+        map.refresh_visibility(x, y);
     }
 
     for object in objects {
-        //if fov_map.is_in_fov(object.x, object.y) {
-        object.draw(con);
-        //}
+        let (x, y) = object.get_pos();
+        let tile = map.map[x as usize][y as usize];
+        if tile.visible {
+            object.draw(con);
+        }
     }
 
     for y in 0..MAP_HEIGHT {

@@ -1,4 +1,4 @@
-use tcod::colors::{self, Color};
+use tcod::colors::Color;
 
 const COLOR_DARK_WALL: Color = Color { r: 51, g: 21, b: 0 };
 const COLOR_DARK_FLOOR: Color = Color {
@@ -26,9 +26,9 @@ impl Tile {
             block_sight: false,
             explored: false,
             visible: false,
-            x: x,
-            y: y,
-            shade_factor: shade_factor,
+            x,
+            y,
+            shade_factor,
             color: COLOR_DARK_FLOOR,
         }
     }
@@ -39,9 +39,9 @@ impl Tile {
             block_sight: true,
             explored: false,
             visible: false,
-            x: x,
-            y: y,
-            shade_factor: shade_factor,
+            x,
+            y,
+            shade_factor,
             color: COLOR_DARK_WALL,
         }
     }
