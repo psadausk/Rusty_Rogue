@@ -1,6 +1,9 @@
 extern crate rand;
 
-use crate::entities::object::Object;
+use entities::object::Ai;
+use entities::object::DeathCallback;
+use entities::object::Fighter;
+use entities::object::Object;
 
 use self::rand::Rng;
 use map::rect::Rect;
@@ -33,19 +36,12 @@ impl Map {
         }
     }
 
-    // pub fn make_fixed_map(&mut self) -> (i32, i32) {
-    //     let room = Rect::new(20, 20, 15, 15);
-    //     self.create_room(room);
+    pub fn is_in_fov(&self, object: &Object) -> bool {
+        let (x, y) = object.get_pos();
+        return self.map[x as usize][y as usize].visible;
+    }
 
-    //     self.map[23][24] = Tile::wall(23, 24, DEFAULT_SHADE_FACTOR);
-    //     self.map[25][23] = Tile::wall(25, 23, DEFAULT_SHADE_FACTOR);
-    //     self.map[25][24] = Tile::wall(25, 24, DEFAULT_SHADE_FACTOR);
-    //     self.map[25][25] = Tile::wall(25, 25, DEFAULT_SHADE_FACTOR);
-
-    //     (22, 27)
-    // }
-
-    pub fn make_rand_map(&mut self) -> (Vec<Object>) {
+    pub fn make_rand_map(&mut self) -> Vec<Object> {
         let mut rooms = vec![];
         let mut objects = vec![];
         for _ in 0..MAX_ROOMS {
@@ -68,6 +64,13 @@ impl Map {
                     //start = (new_x, new_y);
                     let mut player = Object::new(new_x, new_y, '@', "player", colors::WHITE, true);
                     player.alive = true;
+                    player.fighter = Some(Fighter {
+                        max_hp: 30,
+                        hp: 30,
+                        defense: 2,
+                        power: 5,
+                        on_death: DeathCallback::Player,
+                    });
                     objects.push(player);
                 } else {
                     // all rooms after the first:
@@ -220,9 +223,27 @@ impl Map {
             let y = rand::thread_rng().gen_range(room.y1 + 1, room.y2);
 
             let mut monster = if rand::random::<f32>() < 0.8 {
-                Object::new(x, y, 'o', "Orc", colors::DESATURATED_GREEN, true)
+                let mut orc = Object::new(x, y, 'o', "Orc", colors::DESATURATED_GREEN, true);
+                orc.fighter = Some(Fighter {
+                    max_hp: 10,
+                    hp: 10,
+                    defense: 0,
+                    power: 3,
+                    on_death: DeathCallback::Monster,
+                });
+                orc.ai = Some(Ai::Basic);
+                orc
             } else {
-                Object::new(x, y, 'T', "Troll", colors::DARKER_GREEN, true)
+                let mut troll = Object::new(x, y, 'T', "Troll", colors::DARKER_GREEN, true);
+                troll.fighter = Some(Fighter {
+                    max_hp: 16,
+                    hp: 16,
+                    defense: 1,
+                    power: 4,
+                    on_death: DeathCallback::Monster,
+                });
+                troll.ai = Some(Ai::Basic);
+                troll
             };
             monster.alive = true;
             objects.push(monster);
