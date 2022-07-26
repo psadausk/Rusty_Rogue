@@ -1,7 +1,8 @@
 [package]
-name = "RustyRogue"
+name = "rust_rogue"
 version = "0.1.0"
 
 [dependencies]
 rand = "0.3"
-tcod = "0.15"
+#tcod = "0.15"
+tcod = { git= "https://github.com/tomassedovic/tcod-rs.git"}
