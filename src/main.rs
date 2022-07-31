@@ -3,6 +3,7 @@ extern crate tcod;
 
 use std::{cmp, env};
 
+use entities::light;
 use entities::object::Object;
 
 use map::map::Map;
@@ -196,8 +197,17 @@ fn player_move_or_attack(dx: i32, dy: i32, game: &mut Game, objects: &mut [Objec
 
 fn render_all(tcod: &mut Tcod, objects: &[Object], game: &mut Game, fov_recompute: bool) {
     if fov_recompute {
-        let (x, y) = objects[0].get_pos();
-        game.map.refresh_visibility(x, y);
+        // let (x, y) = objects[0].get_pos();
+        // game.map.refresh_visibility(x, y);
+
+        for obj in objects {
+            // let (x, y) = objects[idx].get_pos();
+            // match(objects[idx])
+            if let Some(light) = &obj.light {
+                let (x, y) = obj.get_pos();
+                game.map.refresh_lights(x, y, light)
+            }
+        }
     }
 
     let mut to_draw: Vec<_> = objects.iter().filter(|o| game.map.is_in_fov(o)).collect();
@@ -206,7 +216,14 @@ fn render_all(tcod: &mut Tcod, objects: &[Object], game: &mut Game, fov_recomput
         let (x, y) = object.get_pos();
         let tile = game.map.map[x as usize][y as usize];
         if tile.visible {
-            object.draw(&mut tcod.con);
+            //object.draw(&mut tcod.con);
+            let color = shade_color(
+                object.color,
+                game.map.map[x as usize][y as usize].shade_factor,
+            );
+            tcod.con.set_default_foreground(color);
+            let (x, y) = object.get_pos();
+            tcod.con.put_char(x, y, object.char, BackgroundFlag::None);
         }
     }
 
@@ -214,14 +231,12 @@ fn render_all(tcod: &mut Tcod, objects: &[Object], game: &mut Game, fov_recomput
         for x in 0..MAP_WIDTH {
             let visible = game.map.map[x as usize][y as usize].visible;
 
-            let mut color = game.map.map[x as usize][y as usize].color;
+            let color = shade_color(
+                game.map.map[x as usize][y as usize].color,
+                game.map.map[x as usize][y as usize].shade_factor,
+            );
 
-            color.r = ((color.r as f32) * (1.0 - game.map.map[x as usize][y as usize].shade_factor))
-                as u8;
-            color.g = ((color.g as f32) * (1.0 - game.map.map[x as usize][y as usize].shade_factor))
-                as u8;
-            color.b = ((color.b as f32) * (1.0 - game.map.map[x as usize][y as usize].shade_factor))
-                as u8;
+            //println!("color: {0}", color);
             let explored = &mut game.map.map[x as usize][y as usize].explored;
             if visible {
                 *explored = true;
@@ -291,6 +306,14 @@ fn render_all(tcod: &mut Tcod, objects: &[Object], game: &mut Game, fov_recomput
         1.0,
     );
     tcod.root.flush();
+}
+
+fn shade_color(original: Color, shade_factor: f32) -> Color {
+    let mut color: Color = colors::WHITE;
+    color.r = ((original.r as f32) * (1.0 - shade_factor)) as u8;
+    color.g = ((original.g as f32) * (1.0 - shade_factor)) as u8;
+    color.b = ((original.b as f32) * (1.0 - shade_factor)) as u8;
+    return color;
 }
 
 fn ai_turn(monster_id: usize, game: &mut Game, objects: &mut [Object]) {

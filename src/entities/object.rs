@@ -4,18 +4,20 @@ extern crate tcod;
 use tcod::colors::{self, Color};
 use tcod::console::*;
 
+use super::light::LightSource;
 use Game;
 
 pub struct Object {
     x: i32,
     y: i32,
-    char: char,
-    color: Color,
+    pub char: char,
+    pub color: Color,
     pub name: String,
     pub blocks: bool,
     pub alive: bool,
     pub fighter: Option<Fighter>,
     pub ai: Option<Ai>,
+    pub light: Option<LightSource>,
 }
 
 impl Object {
@@ -30,6 +32,7 @@ impl Object {
             alive: false,
             fighter: None,
             ai: None,
+            light: None,
         }
     }
 

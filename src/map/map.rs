@@ -5,6 +5,9 @@ use entities::object::DeathCallback;
 use entities::object::Fighter;
 use entities::object::Object;
 
+use crate::entities::light;
+use crate::entities::light::LightSource;
+
 use self::rand::Rng;
 use map::rect::Rect;
 use map::shadow_line::Shadow;
@@ -71,6 +74,7 @@ impl Map {
                         power: 5,
                         on_death: DeathCallback::Player,
                     });
+                    player.light = Some(LightSource::new(3.0, 8.0));
                     objects.push(player);
                 } else {
                     // all rooms after the first:
@@ -121,13 +125,16 @@ impl Map {
     }
 
     //Visibility
-    pub fn refresh_visibility(&mut self, x: i32, y: i32) {
+    pub fn refresh_lights(&mut self, x: i32, y: i32, light_source: &LightSource) {
+        println!();
+        println!();
+        println!("new refresh");
         for octant in 0..8 {
-            self.refresh_octant(x, y, octant);
+            self.refresh_octant(x, y, octant, light_source);
         }
     }
 
-    fn refresh_octant(&mut self, x: i32, y: i32, octant: i32) {
+    fn refresh_octant(&mut self, x: i32, y: i32, octant: i32, light_source: &LightSource) {
         let mut line = ShadowLine::new();
         let mut full_shadow = false;
         let mut row = 1;
@@ -165,16 +172,19 @@ impl Map {
                 } else {
                     let projection = self.project_tile(row as f32, col as f32);
                     let visible = !line.is_in_shadow(&projection);
-                    self.map[pos_x as usize][pos_y as usize].visible = visible;
                     if visible && self.map[pos_x as usize][pos_y as usize].block_sight {
                         line.add(projection);
                         full_shadow = line.is_full_shadow();
                     }
-                    if visible {
+                    let dist = ((i32::pow(row, 2) + i32::pow(col, 2)) as f64).sqrt() as f32;
+                    if (visible && dist < light_source.max_dist) {
                         self.map[pos_x as usize][pos_y as usize].shade_factor =
-                            self.get_shade_factor(row, col);
+                            self.get_shade_factor(row, col, light_source);
+                        self.map[pos_x as usize][pos_y as usize].visible = true;
                     } else {
-                        self.map[pos_x as usize][pos_y as usize].shade_factor = DEFAULT_SHADE_FACTOR
+                        self.map[pos_x as usize][pos_y as usize].shade_factor =
+                            DEFAULT_SHADE_FACTOR;
+                        self.map[pos_x as usize][pos_y as usize].visible = false;
                     }
                 }
             }
@@ -183,13 +193,15 @@ impl Map {
         //for row in 1..
     }
 
-    fn get_shade_factor(&self, x: i32, y: i32) -> f32 {
-        let square = (x * x + y * y) as f32;
-        //println!("square: {0}", square);
-        let intesity = 1.0 - (square / (20.0 * 20.0));
-        //println!("intensity: {0}", intesity);
-        let ret = f32::min(DEFAULT_SHADE_FACTOR, (1.0 - intesity) as f32);
-        //let ret = f32::min(0.7, (distance / 20.0) as f32);
+    fn get_shade_factor(&self, x: i32, y: i32, light_source: &LightSource) -> f32 {
+        //println!("x: {0}, y: {1}", x, y);
+        let distance = ((x * x + y * y) as f64).sqrt() as f32;
+
+        //println!("distance: {0}", distance);
+        let intensity = light_source.calc_shade_percent(distance);
+
+        let ret = f32::min(DEFAULT_SHADE_FACTOR, (intensity) as f32);
+        println!("intensity: {0}", intensity);
         return ret;
     }
 
