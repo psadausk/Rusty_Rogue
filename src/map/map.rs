@@ -5,7 +5,6 @@ use entities::object::DeathCallback;
 use entities::object::Fighter;
 use entities::object::Object;
 
-use crate::entities::light;
 use crate::entities::light::LightSource;
 
 use self::rand::Rng;
@@ -14,7 +13,9 @@ use map::shadow_line::Shadow;
 use map::shadow_line::ShadowLine;
 use map::tile::Tile;
 use std::cmp;
+use std::vec;
 use tcod::colors;
+
 const ROOM_MAX_SIZE: i32 = 10;
 const ROOM_MIN_SIZE: i32 = 6;
 const MAX_ROOMS: i32 = 30;
@@ -41,7 +42,22 @@ impl Map {
 
     pub fn is_in_fov(&self, object: &Object) -> bool {
         let (x, y) = object.get_pos();
-        return self.map[x as usize][y as usize].visible;
+        return self.get_tile(x, y).visible;
+    }
+
+    pub fn get_tile(&self, x: i32, y: i32) -> Tile {
+        return self.map[x as usize][y as usize];
+    }
+
+    pub fn valid_point(&self, x: i32, y: i32) -> bool {
+        if x < 0 || x >= self.width {
+            return false;
+        }
+
+        if y < 0 || y >= self.height {
+            return false;
+        }
+        return true;
     }
 
     pub fn make_rand_map(&mut self) -> Vec<Object> {
@@ -125,44 +141,34 @@ impl Map {
     }
 
     //Visibility
-    pub fn refresh_lights(&mut self, x: i32, y: i32, light_source: &LightSource) {
+    pub fn refresh_visibility(&mut self, x: i32, y: i32) {
         println!();
         println!();
         println!("new refresh");
         for octant in 0..8 {
-            self.refresh_octant(x, y, octant, light_source);
+            self.refresh_octant(x, y, octant);
         }
     }
 
-    fn refresh_octant(&mut self, x: i32, y: i32, octant: i32, light_source: &LightSource) {
+    //Each octant represents 45 degrees
+    fn refresh_octant(&mut self, x: i32, y: i32, octant: i32) {
         let mut line = ShadowLine::new();
         let mut full_shadow = false;
         let mut row = 1;
-        //TODO: set limit to how far we can see
-        //let radius = 20;
 
         loop {
             let (x_transform, y_transform) = self.transform_octant(row, 0, octant);
             let (pos_x, pos_y) = (x + x_transform, y + y_transform);
 
-            if pos_x < 0 || pos_x >= self.width {
+            if !self.valid_point(pos_x, pos_y) {
                 break;
             }
-
-            if pos_y < 0 || pos_y >= self.height {
-                break;
-            }
-
             for col in 0..row + 1 {
                 //if out of bounds, break
                 let (x_transform, y_transform) = self.transform_octant(row, col, octant);
                 let (pos_x, pos_y) = (x + x_transform, y + y_transform);
 
-                if pos_x < 0 || pos_x >= self.width {
-                    break;
-                }
-
-                if pos_y < 0 || pos_y >= self.height {
+                if !self.valid_point(pos_x, pos_y) {
                     break;
                 }
 
@@ -176,10 +182,7 @@ impl Map {
                         line.add(projection);
                         full_shadow = line.is_full_shadow();
                     }
-                    let dist = ((i32::pow(row, 2) + i32::pow(col, 2)) as f64).sqrt() as f32;
-                    if (visible && dist < light_source.max_dist) {
-                        self.map[pos_x as usize][pos_y as usize].shade_factor =
-                            self.get_shade_factor(row, col, light_source);
+                    if visible {
                         self.map[pos_x as usize][pos_y as usize].visible = true;
                     } else {
                         self.map[pos_x as usize][pos_y as usize].shade_factor =
@@ -193,6 +196,34 @@ impl Map {
         //for row in 1..
     }
 
+    ///
+    /// Lights all tiles around the point, using the light source
+    ///
+    ///
+    pub fn light_tiles(&mut self, x: i32, y: i32, light_source: &LightSource) {
+        let max_dist: i32 = light_source.max_dist as i32;
+
+        for width in -max_dist..=max_dist {
+            let max_height = (max_dist - width.abs());
+
+            for height in -max_height..=max_height {
+                let tile_x = x + width;
+                let tile_y = y + height;
+
+                if !self.valid_point(tile_x, tile_y) {
+                    continue;
+                }
+                if self.get_tile(tile_x, tile_y).visible {
+                    let new_shade_factor =
+                        self.get_shade_factor(width.abs(), height.abs(), light_source);
+                    if new_shade_factor < self.map[tile_x as usize][tile_y as usize].shade_factor {
+                        self.map[tile_x as usize][tile_y as usize].shade_factor = new_shade_factor;
+                    }
+                }
+            }
+        }
+    }
+
     fn get_shade_factor(&self, x: i32, y: i32, light_source: &LightSource) -> f32 {
         //println!("x: {0}, y: {1}", x, y);
         let distance = ((x * x + y * y) as f64).sqrt() as f32;
@@ -201,7 +232,7 @@ impl Map {
         let intensity = light_source.calc_shade_percent(distance);
 
         let ret = f32::min(DEFAULT_SHADE_FACTOR, (intensity) as f32);
-        println!("intensity: {0}", intensity);
+        //println!("intensity: {0}", intensity);
         return ret;
     }
 
@@ -211,7 +242,7 @@ impl Map {
         Shadow::new(top_left, bottom_right)
     }
 
-    // octants represent the 8 spaces around the player
+    // takes in a point in 2d spaces, and transforms it to the relevant octant.
     fn transform_octant(&self, row: i32, col: i32, octant: i32) -> (i32, i32) {
         match octant {
             0 => return (col, -row),
@@ -258,6 +289,10 @@ impl Map {
                 troll
             };
             monster.alive = true;
+
+            if rand::random::<f32>() < 0.5 {
+                monster.light = Some(LightSource::new(3.0, 8.0));
+            }
             objects.push(monster);
         }
     }

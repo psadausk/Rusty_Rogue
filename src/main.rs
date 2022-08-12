@@ -196,16 +196,20 @@ fn player_move_or_attack(dx: i32, dy: i32, game: &mut Game, objects: &mut [Objec
 }
 
 fn render_all(tcod: &mut Tcod, objects: &[Object], game: &mut Game, fov_recompute: bool) {
+    //If we're recomputing fov, first get the player's line of sight,
+    //and use that to mark whether a tile is visible or not.
+    //Use this to color everything the default shade factor also
+
+    //Next for each object , for every point within the light's raduis, check to see if it's visible.
+    //If it is calculate the shade factor from the original objects light, and apply it if it's stronger(?)
     if fov_recompute {
-        // let (x, y) = objects[0].get_pos();
-        // game.map.refresh_visibility(x, y);
+        let (x, y) = objects[0].get_pos();
+        game.map.refresh_visibility(x, y);
 
         for obj in objects {
-            // let (x, y) = objects[idx].get_pos();
-            // match(objects[idx])
             if let Some(light) = &obj.light {
                 let (x, y) = obj.get_pos();
-                game.map.refresh_lights(x, y, light)
+                game.map.light_tiles(x, y, light)
             }
         }
     }
